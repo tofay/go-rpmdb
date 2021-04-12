@@ -117,67 +117,67 @@ func newPackage(indexEntries []indexEntry) (*PackageInfo, error) {
 	pkgInfo := &PackageInfo{}
 	var err error
 
-	for _, indexEntry := range indexEntries {
-		switch indexEntry.Info.Tag {
+	for _, entry := range indexEntries {
+		switch entry.Info.Tag {
 		case RPMTAG_NAME:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag name")
 			}
-			pkgInfo.Name = parseString(indexEntry.Data)
+			pkgInfo.Name = parseString(entry.Data)
 		case RPMTAG_EPOCH:
-			if indexEntry.Info.Type != RPM_INT32_TYPE {
+			if entry.Info.Type != RPM_INT32_TYPE {
 				return nil, xerrors.New("invalid tag epoch")
 			}
 
-			pkgInfo.Epoch, err = parseInt32(indexEntry.Data)
+			pkgInfo.Epoch, err = parseInt32(entry.Data)
 			if err != nil {
 				return nil, xerrors.Errorf("failed to parse epoch: %w", err)
 			}
 		case RPMTAG_VERSION:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag version")
 			}
-			pkgInfo.Version = parseString(indexEntry.Data)
+			pkgInfo.Version = parseString(entry.Data)
 		case RPMTAG_RELEASE:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag release")
 			}
-			pkgInfo.Release = parseString(indexEntry.Data)
+			pkgInfo.Release = parseString(entry.Data)
 		case RPMTAG_ARCH:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag arch")
 			}
-			pkgInfo.Arch = parseString(indexEntry.Data)
+			pkgInfo.Arch = parseString(entry.Data)
 		case RPMTAG_SOURCERPM:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag sourcerpm")
 			}
-			pkgInfo.SourceRpm = parseString(indexEntry.Data)
+			pkgInfo.SourceRpm = parseString(entry.Data)
 			if pkgInfo.SourceRpm == "(none)" {
 				pkgInfo.SourceRpm = ""
 			}
 		case RPMTAG_LICENSE:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag license")
 			}
-			pkgInfo.License = parseString(indexEntry.Data)
+			pkgInfo.License = parseString(entry.Data)
 			if pkgInfo.License == "(none)" {
 				pkgInfo.License = ""
 			}
 		case RPMTAG_VENDOR:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag vendor")
 			}
-			pkgInfo.Vendor = parseString(indexEntry.Data)
+			pkgInfo.Vendor = parseString(entry.Data)
 			if pkgInfo.Vendor == "(none)" {
 				pkgInfo.Vendor = ""
 			}
 		case RPMTAG_SIZE:
-			if indexEntry.Info.Type != RPM_INT32_TYPE {
+			if entry.Info.Type != RPM_INT32_TYPE {
 				return nil, xerrors.New("invalid tag size")
 			}
 
-			pkgInfo.Size, err = parseInt32(indexEntry.Data)
+			pkgInfo.Size, err = parseInt32(entry.Data)
 			if err != nil {
 				return nil, xerrors.Errorf("failed to parse size: %w", err)
 			}
