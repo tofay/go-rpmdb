@@ -8,16 +8,17 @@ import (
 )
 
 type PackageInfo struct {
-	Epoch     int
-	Name      string
-	Version   string
-	Release   string
-	Arch      string
-	SourceRpm string
-	Size      int
-	License   string
-	Vendor    string
-	Files     []FileInfo
+	Epoch           int
+	Name            string
+	Version         string
+	Release         string
+	Arch            string
+	SourceRpm       string
+	Size            int
+	License         string
+	Vendor          string
+	DigestAlgorithm DigestAlgorithm
+	Files           []FileInfo
 }
 
 type FileInfo struct {
@@ -33,24 +34,25 @@ type FileInfo struct {
 const (
 	// rpmTag_e
 	// ref. https://github.com/rpm-software-management/rpm/blob/rpm-4.11.3-release/lib/rpmtag.h#L28
-	RPMTAG_NAME          = 1000 /* s */
-	RPMTAG_VERSION       = 1001 /* s */
-	RPMTAG_RELEASE       = 1002 /* s */
-	RPMTAG_EPOCH         = 1003 /* i */
-	RPMTAG_ARCH          = 1022 /* s */
-	RPMTAG_SOURCERPM     = 1044 /* s */
-	RPMTAG_SIZE          = 1009 /* i */
-	RPMTAG_LICENSE       = 1014 /* s */
-	RPMTAG_VENDOR        = 1011 /* s */
-	RPMTAG_DIRINDEXES    = 1116 /* i[] */
-	RPMTAG_BASENAMES     = 1117 /* s[] */
-	RPMTAG_DIRNAMES      = 1118 /* s[] */
-	RPMTAG_FILESIZES     = 1028 /* i[] */
-	RPMTAG_FILEMODES     = 1030 /* h[] , specifically []uint16 (ref https://github.com/rpm-software-management/rpm/blob/2153fa4ae51a84547129b8ebb3bb396e1737020e/lib/rpmtypes.h#L53 )*/
-	RPMTAG_FILEDIGESTS   = 1035 /* s[] */
-	RPMTAG_FILEFLAGS     = 1037 /* i[] */
-	RPMTAG_FILEUSERNAME  = 1039 /* s[] */
-	RPMTAG_FILEGROUPNAME = 1040 /* s[] */
+	RPMTAG_NAME           = 1000 /* s */
+	RPMTAG_VERSION        = 1001 /* s */
+	RPMTAG_RELEASE        = 1002 /* s */
+	RPMTAG_EPOCH          = 1003 /* i */
+	RPMTAG_ARCH           = 1022 /* s */
+	RPMTAG_SOURCERPM      = 1044 /* s */
+	RPMTAG_SIZE           = 1009 /* i */
+	RPMTAG_LICENSE        = 1014 /* s */
+	RPMTAG_VENDOR         = 1011 /* s */
+	RPMTAG_DIRINDEXES     = 1116 /* i[] */
+	RPMTAG_BASENAMES      = 1117 /* s[] */
+	RPMTAG_DIRNAMES       = 1118 /* s[] */
+	RPMTAG_FILESIZES      = 1028 /* i[] */
+	RPMTAG_FILEMODES      = 1030 /* h[] , specifically []uint16 (ref https://github.com/rpm-software-management/rpm/blob/2153fa4ae51a84547129b8ebb3bb396e1737020e/lib/rpmtypes.h#L53 )*/
+	RPMTAG_FILEDIGESTS    = 1035 /* s[] */
+	RPMTAG_FILEFLAGS      = 1037 /* i[] */
+	RPMTAG_FILEUSERNAME   = 1039 /* s[] */
+	RPMTAG_FILEGROUPNAME  = 1040 /* s[] */
+	RPMTAG_FILEDIGESTALGO = 5011 /* i  */
 
 	//rpmTagType_e
 	// ref. https://github.com/rpm-software-management/rpm/blob/rpm-4.11.3-release/lib/rpmtag.h#L362
@@ -181,7 +183,21 @@ func newPackage(indexEntries []indexEntry) (*PackageInfo, error) {
 			if err != nil {
 				return nil, xerrors.Errorf("failed to parse size: %w", err)
 			}
+		case RPMTAG_FILEDIGESTALGO:
+			// note: all digests within a package entry only supports a single digest algorithm (there may be future support for
+			// algorithm noted for each file entry, but currently unimplemented: https://github.com/rpm-software-management/rpm/blob/0b75075a8d006c8f792d33a57eae7da6b66a4591/lib/rpmtag.h#L256)
+			if entry.Info.Type != RPM_INT32_TYPE {
+				return nil, xerrors.New("invalid tag digest algo")
+			}
+
+			digestAlgorithm, err := parseInt32(entry.Data)
+			if err != nil {
+				return nil, xerrors.Errorf("failed to parse size: %w", err)
+			}
+
+			pkgInfo.DigestAlgorithm = DigestAlgorithm(digestAlgorithm)
 		}
+
 	}
 
 	files, err := getFileInfo(indexEntries)
