@@ -21,30 +21,36 @@ type PackageInfo struct {
 }
 
 type FileInfo struct {
-	Path   string
-	Mode   uint16
-	SHA256 string
-	Size   int32
+	Path      string
+	Mode      uint16
+	SHA256    string
+	Size      int32
+	Username  string
+	Groupname string
+	Flags     FileFlags
 }
 
 const (
 	// rpmTag_e
 	// ref. https://github.com/rpm-software-management/rpm/blob/rpm-4.11.3-release/lib/rpmtag.h#L28
-	RPMTAG_NAME        = 1000 /* s */
-	RPMTAG_VERSION     = 1001 /* s */
-	RPMTAG_RELEASE     = 1002 /* s */
-	RPMTAG_EPOCH       = 1003 /* i */
-	RPMTAG_ARCH        = 1022 /* s */
-	RPMTAG_SOURCERPM   = 1044 /* s */
-	RPMTAG_SIZE        = 1009 /* i */
-	RPMTAG_LICENSE     = 1014 /* s */
-	RPMTAG_VENDOR      = 1011 /* s */
-	RPMTAG_DIRINDEXES  = 1116 /* i[] */
-	RPMTAG_BASENAMES   = 1117 /* s[] */
-	RPMTAG_DIRNAMES    = 1118 /* s[] */
-	RPMTAG_FILESIZES   = 1028 /* i[] */
-	RPMTAG_FILEMODES   = 1030 /* h[] , specifically []uint16 (ref https://github.com/rpm-software-management/rpm/blob/2153fa4ae51a84547129b8ebb3bb396e1737020e/lib/rpmtypes.h#L53 )*/
-	RPMTAG_FILEDIGESTS = 1035 /* s[] */
+	RPMTAG_NAME          = 1000 /* s */
+	RPMTAG_VERSION       = 1001 /* s */
+	RPMTAG_RELEASE       = 1002 /* s */
+	RPMTAG_EPOCH         = 1003 /* i */
+	RPMTAG_ARCH          = 1022 /* s */
+	RPMTAG_SOURCERPM     = 1044 /* s */
+	RPMTAG_SIZE          = 1009 /* i */
+	RPMTAG_LICENSE       = 1014 /* s */
+	RPMTAG_VENDOR        = 1011 /* s */
+	RPMTAG_DIRINDEXES    = 1116 /* i[] */
+	RPMTAG_BASENAMES     = 1117 /* s[] */
+	RPMTAG_DIRNAMES      = 1118 /* s[] */
+	RPMTAG_FILESIZES     = 1028 /* i[] */
+	RPMTAG_FILEMODES     = 1030 /* h[] , specifically []uint16 (ref https://github.com/rpm-software-management/rpm/blob/2153fa4ae51a84547129b8ebb3bb396e1737020e/lib/rpmtypes.h#L53 )*/
+	RPMTAG_FILEDIGESTS   = 1035 /* s[] */
+	RPMTAG_FILEFLAGS     = 1037 /* i[] */
+	RPMTAG_FILEUSERNAME  = 1039 /* s[] */
+	RPMTAG_FILEGROUPNAME = 1040 /* s[] */
 
 	//rpmTagType_e
 	// ref. https://github.com/rpm-software-management/rpm/blob/rpm-4.11.3-release/lib/rpmtag.h#L362
@@ -199,6 +205,9 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 	var allFileDigests []string
 	var allFileModes []uint16
 	var allFileSizes []int32
+	var allFileFlags []int32
+	var allUserNames []string
+	var allGroupNames []string
 
 	for _, indexEntry := range indexEntries {
 		switch indexEntry.Info.Tag {
@@ -211,6 +220,15 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 			allFileSizes, err = parseInt32Array(indexEntry.Data, indexEntry.Length)
 			if err != nil {
 				return nil, xerrors.Errorf("failed to parse file-sizes: %w", err)
+			}
+		case RPMTAG_FILEFLAGS:
+			// note: there is no distinction between int32, uint32, and []uint32
+			if indexEntry.Info.Type != RPM_INT32_TYPE {
+				return nil, xerrors.New("invalid tag file-flags")
+			}
+			allFileFlags, err = parseInt32Array(indexEntry.Data, indexEntry.Length)
+			if err != nil {
+				return nil, xerrors.Errorf("failed to parse file-flags: %w", err)
 			}
 		case RPMTAG_FILEDIGESTS:
 			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
@@ -231,6 +249,16 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 				return nil, xerrors.New("invalid tag basenames")
 			}
 			allBasenames = parseStringArray(indexEntry.Data)
+		case RPMTAG_FILEUSERNAME:
+			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
+				return nil, xerrors.New("invalid tag usernames")
+			}
+			allUserNames = parseStringArray(indexEntry.Data)
+		case RPMTAG_FILEGROUPNAME:
+			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
+				return nil, xerrors.New("invalid tag groupnames")
+			}
+			allGroupNames = parseStringArray(indexEntry.Data)
 		case RPMTAG_DIRNAMES:
 			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
 				return nil, xerrors.New("invalid tag dir-names")
@@ -252,9 +280,9 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 	var files []FileInfo
 	if allDirs != nil && allDirIndexes != nil {
 		for i, file := range allBasenames {
-			var digest string
+			var digest, username, groupname string
 			var mode uint16
-			var size int32
+			var size, flags int32
 
 			if allFileDigests != nil && len(allFileDigests) > i {
 				digest = allFileDigests[i]
@@ -268,11 +296,26 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 				size = allFileSizes[i]
 			}
 
+			if allUserNames != nil && len(allUserNames) > i {
+				username = allUserNames[i]
+			}
+
+			if allGroupNames != nil && len(allGroupNames) > i {
+				groupname = allGroupNames[i]
+			}
+
+			if allFileFlags != nil && len(allFileFlags) > i {
+				flags = allFileFlags[i]
+			}
+
 			record := FileInfo{
-				Path:   allDirs[allDirIndexes[i]] + file,
-				Mode:   mode,
-				SHA256: digest,
-				Size:   size,
+				Path:      allDirs[allDirIndexes[i]] + file,
+				Mode:      mode,
+				SHA256:    digest,
+				Size:      size,
+				Username:  username,
+				Groupname: groupname,
+				Flags:     FileFlags(flags),
 			}
 			files = append(files, record)
 		}
