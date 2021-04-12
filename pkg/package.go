@@ -8,43 +8,51 @@ import (
 )
 
 type PackageInfo struct {
-	Epoch     int
-	Name      string
-	Version   string
-	Release   string
-	Arch      string
-	SourceRpm string
-	Size      int
-	License   string
-	Vendor    string
-	Files     []FileInfo
+	Epoch           int
+	Name            string
+	Version         string
+	Release         string
+	Arch            string
+	SourceRpm       string
+	Size            int
+	License         string
+	Vendor          string
+	DigestAlgorithm DigestAlgorithm
+	Files           []FileInfo
 }
 
 type FileInfo struct {
-	Path   string
-	Mode   uint16
-	SHA256 string
-	Size   int32
+	Path      string
+	Mode      uint16
+	SHA256    string
+	Size      int32
+	Username  string
+	Groupname string
+	Flags     FileFlags
 }
 
 const (
 	// rpmTag_e
 	// ref. https://github.com/rpm-software-management/rpm/blob/rpm-4.11.3-release/lib/rpmtag.h#L28
-	RPMTAG_NAME        = 1000 /* s */
-	RPMTAG_VERSION     = 1001 /* s */
-	RPMTAG_RELEASE     = 1002 /* s */
-	RPMTAG_EPOCH       = 1003 /* i */
-	RPMTAG_ARCH        = 1022 /* s */
-	RPMTAG_SOURCERPM   = 1044 /* s */
-	RPMTAG_SIZE        = 1009 /* i */
-	RPMTAG_LICENSE     = 1014 /* s */
-	RPMTAG_VENDOR      = 1011 /* s */
-	RPMTAG_DIRINDEXES  = 1116 /* i[] */
-	RPMTAG_BASENAMES   = 1117 /* s[] */
-	RPMTAG_DIRNAMES    = 1118 /* s[] */
-	RPMTAG_FILESIZES   = 1028 /* i[] */
-	RPMTAG_FILEMODES   = 1030 /* h[] , specifically []uint16 (ref https://github.com/rpm-software-management/rpm/blob/2153fa4ae51a84547129b8ebb3bb396e1737020e/lib/rpmtypes.h#L53 )*/
-	RPMTAG_FILEDIGESTS = 1035 /* s[] */
+	RPMTAG_NAME           = 1000 /* s */
+	RPMTAG_VERSION        = 1001 /* s */
+	RPMTAG_RELEASE        = 1002 /* s */
+	RPMTAG_EPOCH          = 1003 /* i */
+	RPMTAG_ARCH           = 1022 /* s */
+	RPMTAG_SOURCERPM      = 1044 /* s */
+	RPMTAG_SIZE           = 1009 /* i */
+	RPMTAG_LICENSE        = 1014 /* s */
+	RPMTAG_VENDOR         = 1011 /* s */
+	RPMTAG_DIRINDEXES     = 1116 /* i[] */
+	RPMTAG_BASENAMES      = 1117 /* s[] */
+	RPMTAG_DIRNAMES       = 1118 /* s[] */
+	RPMTAG_FILESIZES      = 1028 /* i[] */
+	RPMTAG_FILEMODES      = 1030 /* h[] , specifically []uint16 (ref https://github.com/rpm-software-management/rpm/blob/2153fa4ae51a84547129b8ebb3bb396e1737020e/lib/rpmtypes.h#L53 )*/
+	RPMTAG_FILEDIGESTS    = 1035 /* s[] */
+	RPMTAG_FILEFLAGS      = 1037 /* i[] */
+	RPMTAG_FILEUSERNAME   = 1039 /* s[] */
+	RPMTAG_FILEGROUPNAME  = 1040 /* s[] */
+	RPMTAG_FILEDIGESTALGO = 5011 /* i  */
 
 	//rpmTagType_e
 	// ref. https://github.com/rpm-software-management/rpm/blob/rpm-4.11.3-release/lib/rpmtag.h#L362
@@ -111,71 +119,85 @@ func newPackage(indexEntries []indexEntry) (*PackageInfo, error) {
 	pkgInfo := &PackageInfo{}
 	var err error
 
-	for _, indexEntry := range indexEntries {
-		switch indexEntry.Info.Tag {
+	for _, entry := range indexEntries {
+		switch entry.Info.Tag {
 		case RPMTAG_NAME:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag name")
 			}
-			pkgInfo.Name = parseString(indexEntry.Data)
+			pkgInfo.Name = parseString(entry.Data)
 		case RPMTAG_EPOCH:
-			if indexEntry.Info.Type != RPM_INT32_TYPE {
+			if entry.Info.Type != RPM_INT32_TYPE {
 				return nil, xerrors.New("invalid tag epoch")
 			}
 
-			pkgInfo.Epoch, err = parseInt32(indexEntry.Data)
+			pkgInfo.Epoch, err = parseInt32(entry.Data)
 			if err != nil {
 				return nil, xerrors.Errorf("failed to parse epoch: %w", err)
 			}
 		case RPMTAG_VERSION:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag version")
 			}
-			pkgInfo.Version = parseString(indexEntry.Data)
+			pkgInfo.Version = parseString(entry.Data)
 		case RPMTAG_RELEASE:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag release")
 			}
-			pkgInfo.Release = parseString(indexEntry.Data)
+			pkgInfo.Release = parseString(entry.Data)
 		case RPMTAG_ARCH:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag arch")
 			}
-			pkgInfo.Arch = parseString(indexEntry.Data)
+			pkgInfo.Arch = parseString(entry.Data)
 		case RPMTAG_SOURCERPM:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag sourcerpm")
 			}
-			pkgInfo.SourceRpm = parseString(indexEntry.Data)
+			pkgInfo.SourceRpm = parseString(entry.Data)
 			if pkgInfo.SourceRpm == "(none)" {
 				pkgInfo.SourceRpm = ""
 			}
 		case RPMTAG_LICENSE:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag license")
 			}
-			pkgInfo.License = parseString(indexEntry.Data)
+			pkgInfo.License = parseString(entry.Data)
 			if pkgInfo.License == "(none)" {
 				pkgInfo.License = ""
 			}
 		case RPMTAG_VENDOR:
-			if indexEntry.Info.Type != RPM_STRING_TYPE {
+			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag vendor")
 			}
-			pkgInfo.Vendor = parseString(indexEntry.Data)
+			pkgInfo.Vendor = parseString(entry.Data)
 			if pkgInfo.Vendor == "(none)" {
 				pkgInfo.Vendor = ""
 			}
 		case RPMTAG_SIZE:
-			if indexEntry.Info.Type != RPM_INT32_TYPE {
+			if entry.Info.Type != RPM_INT32_TYPE {
 				return nil, xerrors.New("invalid tag size")
 			}
 
-			pkgInfo.Size, err = parseInt32(indexEntry.Data)
+			pkgInfo.Size, err = parseInt32(entry.Data)
 			if err != nil {
 				return nil, xerrors.Errorf("failed to parse size: %w", err)
 			}
+		case RPMTAG_FILEDIGESTALGO:
+			// note: all digests within a package entry only supports a single digest algorithm (there may be future support for
+			// algorithm noted for each file entry, but currently unimplemented: https://github.com/rpm-software-management/rpm/blob/0b75075a8d006c8f792d33a57eae7da6b66a4591/lib/rpmtag.h#L256)
+			if entry.Info.Type != RPM_INT32_TYPE {
+				return nil, xerrors.New("invalid tag digest algo")
+			}
+
+			digestAlgorithm, err := parseInt32(entry.Data)
+			if err != nil {
+				return nil, xerrors.Errorf("failed to parse size: %w", err)
+			}
+
+			pkgInfo.DigestAlgorithm = DigestAlgorithm(digestAlgorithm)
 		}
+
 	}
 
 	files, err := getFileInfo(indexEntries)
@@ -199,6 +221,9 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 	var allFileDigests []string
 	var allFileModes []uint16
 	var allFileSizes []int32
+	var allFileFlags []int32
+	var allUserNames []string
+	var allGroupNames []string
 
 	for _, indexEntry := range indexEntries {
 		switch indexEntry.Info.Tag {
@@ -211,6 +236,15 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 			allFileSizes, err = parseInt32Array(indexEntry.Data, indexEntry.Length)
 			if err != nil {
 				return nil, xerrors.Errorf("failed to parse file-sizes: %w", err)
+			}
+		case RPMTAG_FILEFLAGS:
+			// note: there is no distinction between int32, uint32, and []uint32
+			if indexEntry.Info.Type != RPM_INT32_TYPE {
+				return nil, xerrors.New("invalid tag file-flags")
+			}
+			allFileFlags, err = parseInt32Array(indexEntry.Data, indexEntry.Length)
+			if err != nil {
+				return nil, xerrors.Errorf("failed to parse file-flags: %w", err)
 			}
 		case RPMTAG_FILEDIGESTS:
 			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
@@ -231,6 +265,16 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 				return nil, xerrors.New("invalid tag basenames")
 			}
 			allBasenames = parseStringArray(indexEntry.Data)
+		case RPMTAG_FILEUSERNAME:
+			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
+				return nil, xerrors.New("invalid tag usernames")
+			}
+			allUserNames = parseStringArray(indexEntry.Data)
+		case RPMTAG_FILEGROUPNAME:
+			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
+				return nil, xerrors.New("invalid tag groupnames")
+			}
+			allGroupNames = parseStringArray(indexEntry.Data)
 		case RPMTAG_DIRNAMES:
 			if indexEntry.Info.Type != RPM_STRING_ARRAY_TYPE {
 				return nil, xerrors.New("invalid tag dir-names")
@@ -252,9 +296,9 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 	var files []FileInfo
 	if allDirs != nil && allDirIndexes != nil {
 		for i, file := range allBasenames {
-			var digest string
+			var digest, username, groupname string
 			var mode uint16
-			var size int32
+			var size, flags int32
 
 			if allFileDigests != nil && len(allFileDigests) > i {
 				digest = allFileDigests[i]
@@ -268,11 +312,26 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 				size = allFileSizes[i]
 			}
 
+			if allUserNames != nil && len(allUserNames) > i {
+				username = allUserNames[i]
+			}
+
+			if allGroupNames != nil && len(allGroupNames) > i {
+				groupname = allGroupNames[i]
+			}
+
+			if allFileFlags != nil && len(allFileFlags) > i {
+				flags = allFileFlags[i]
+			}
+
 			record := FileInfo{
-				Path:   allDirs[allDirIndexes[i]] + file,
-				Mode:   mode,
-				SHA256: digest,
-				Size:   size,
+				Path:      allDirs[allDirIndexes[i]] + file,
+				Mode:      mode,
+				SHA256:    digest,
+				Size:      size,
+				Username:  username,
+				Groupname: groupname,
+				Flags:     FileFlags(flags),
 			}
 			files = append(files, record)
 		}
