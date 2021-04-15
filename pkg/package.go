@@ -24,7 +24,7 @@ type PackageInfo struct {
 type FileInfo struct {
 	Path      string
 	Mode      uint16
-	SHA256    string
+	Digest    string
 	Size      int32
 	Username  string
 	Groupname string
@@ -327,7 +327,7 @@ func getFileInfo(indexEntries []indexEntry) ([]FileInfo, error) {
 			record := FileInfo{
 				Path:      allDirs[allDirIndexes[i]] + file,
 				Mode:      mode,
-				SHA256:    digest,
+				Digest:    digest,
 				Size:      size,
 				Username:  username,
 				Groupname: groupname,
