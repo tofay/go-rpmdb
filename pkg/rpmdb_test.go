@@ -1,9 +1,12 @@
 package rpmdb
 
 import (
-	"github.com/go-test/deep"
+	"fmt"
+	"github.com/stretchr/testify/assert"
 	"path"
 	"testing"
+
+	"github.com/go-test/deep"
 )
 
 func TestPackageList(t *testing.T) {
@@ -46,7 +49,7 @@ func TestPackageList(t *testing.T) {
 	}
 
 	for _, v := range vectors {
-		t.Run(path.Base(v.file), func(t *testing.T) {
+		t.Run(v.file, func(t *testing.T) {
 			db, err := Open(v.file)
 			if err != nil {
 				t.Fatalf("Open() error: %v", err)
@@ -62,9 +65,20 @@ func TestPackageList(t *testing.T) {
 
 			for i, got := range pkgList {
 				want := v.pkgList[i]
-				if want.Epoch != got.Epoch {
-					t.Errorf("%d: Epoch: got %d, want %d", i, got.Epoch, want.Epoch)
+
+				if !assert.Equal(t, want.Epoch, got.Epoch, fmt.Sprintf("epoch of name=%q", got.Name)) {
+					if want.Epoch != nil {
+						t.Logf("Want Epoch: %d", *want.Epoch)
+					} else {
+						t.Logf("Want Epoch: nil")
+					}
+					if got.Epoch != nil {
+						t.Logf("Got Epoch: %d", *got.Epoch)
+					} else {
+						t.Logf("Got Epoch: nil")
+					}
 				}
+
 				if want.Name != got.Name {
 					t.Errorf("%d: Name: got %s, want %s", i, got.Name, want.Name)
 				}
