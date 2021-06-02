@@ -8,7 +8,7 @@ import (
 )
 
 type PackageInfo struct {
-	Epoch           int
+	Epoch           *int
 	Name            string
 	Version         string
 	Release         string
@@ -131,10 +131,14 @@ func newPackage(indexEntries []indexEntry) (*PackageInfo, error) {
 				return nil, xerrors.New("invalid tag epoch")
 			}
 
-			pkgInfo.Epoch, err = parseInt32(entry.Data)
-			if err != nil {
-				return nil, xerrors.Errorf("failed to parse epoch: %w", err)
+			if entry.Data != nil {
+				value, err := parseInt32(entry.Data)
+				if err != nil {
+					return nil, xerrors.Errorf("failed to parse epoch: %w", err)
+				}
+				pkgInfo.Epoch = &value
 			}
+
 		case RPMTAG_VERSION:
 			if entry.Info.Type != RPM_STRING_TYPE {
 				return nil, xerrors.New("invalid tag version")
