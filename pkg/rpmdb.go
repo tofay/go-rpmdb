@@ -2,14 +2,25 @@ package rpmdb
 
 import (
 	"github.com/anchore/go-rpmdb/pkg/bdb"
+	dbi "github.com/anchore/go-rpmdb/pkg/db"
+	"github.com/anchore/go-rpmdb/pkg/sqlite3"
 	"golang.org/x/xerrors"
 )
 
 type RpmDB struct {
-	db *bdb.BerkeleyDB
+	db dbi.RpmDBInterface
 }
 
 func Open(path string) (*RpmDB, error) {
+	// SQLite3 Open() returns nil, nil in case of DB format other than SQLite3
+	sqldb, err := sqlite3.Open(path)
+	if err != nil && !xerrors.Is(err, sqlite3.ErrorInvalidSQLite3) {
+		return nil, err
+	}
+	if sqldb != nil {
+		return &RpmDB{db: sqldb}, nil
+	}
+
 	db, err := bdb.Open(path)
 	if err != nil {
 		return nil, err

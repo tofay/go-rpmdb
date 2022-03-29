@@ -46,6 +46,10 @@ func TestPackageList(t *testing.T) {
 			file:    "testdata/centos7-httpd24/Packages",
 			pkgList: CentOS7Httpd24,
 		},
+		{
+			file:    "testdata/fedora35/rpmdb.sqlite",
+			pkgList: Fedora35WithSQLite3,
+		},
 	}
 
 	for _, v := range vectors {
